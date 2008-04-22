@@ -1,0 +1,92 @@
+require 'socket'
+ 	
+ 	$recport = 2003
+ 	$sendport = 1979
+ 	$maxSize = 1500
+ 	
+8 	def interpretScreen(frame)
+9 	  pc=0
+10 	  frame = frame.unpack("s*")
+11 	
+12 	  p frame.map { |e| e.to_s(16) }
+13 	 
+14 	  globalx = 0
+15 	  globaly = 0
+16 	  globalscale = 0
+17 	  while pc<512
+18 	    op = (frame[pc] & 0xF000) >> 12
+19 	    case op
+20 	      when 0..9 #VCTR
+21 	        dy = (frame[pc] & 0x03FF)
+22 	        dy = -dy if (frame[pc] & 0x0400) != 0
+23 	       
+24 	        pc = pc + 1
+25 	       
+26 	        z = (frame[pc] & 0xF000) >> 12
+27 	        dx = (frame[pc] & 0x03FF)
+28 	        dx = -dy if (frame[pc] & 0x0400) != 0
+29 	       
+30 	        p "VCTR: op: #{op} dy: #{dy} dx: #{dx} z: #{z}"
+31 	        p "      Shot x: #{globalx} y: #{globaly}" if dx == 0 and dy == 0 and z == 15
+32 	        p "      possible Ship" if op == 6 and z == 12 and dx != 0 and dy != 0       
+33 	      when 0xA #LABS
+34 	        y = (frame[pc] & 0x03FF)
+35 	        pc = pc +1
+36 	        gsf = (frame[pc] & 0xF000) >> 12
+37 	        x = (frame[pc] & 0x03FF)
+38 	        globalx = x
+39 	        globaly = y
+40 	        globalscale = gsf
+41 	        p "LABS y: #{y} x: #{x} gsf: #{gsf}"
+42 	      when 0xB #Halt
+43 	        pc = 10000
+44 	        p "Halt"
+45 	      when 0xC #JSRL
+46 	        a = (frame[pc] & 0x0FFF)
+47 	        p "JSRL a: #{a.to_s(16)}"
+48 	        case a
+49 	          when 0x8F3
+50 	            p "      Asteroid Typ 1"
+51 	          when 0x8FF
+52 	            p "      Asteroid Typ 2"
+53 	          when 0x90D
+54 	            p "      Asteroid Typ 3"
+55 	          when 0x91A
+56 	            p "      Asteroid Typ 4"
+57 	          when 0x929
+58 	            p "      UFO"                                                         
+59 	        end
+60 	      when 0xD #RTSL
+61 	        p "RTSL"
+62 	      when 0xE #JMPL
+63 	        a = (frame[pc] & 0x07FF) - 1
+64 	        p "JMPL a: #{a}"
+65 	      when 0xF #SVEC
+66 	        sf = (frame[pc] & 0x0800) >> 10 + (frame[pc] & 0x00004) >> 3
+67 	        dy = (frame[pc] & 0x0300) >> 8
+68 	        dy = -dy if (frame[pc] & 0x0400) != 0
+69 	        dx = (frame[pc] & 0x0003)
+70 	        dx = -dy if (frame[pc] & 0x0004) != 0
+71 	        z = (frame[pc] & 0x00F0) >> 4
+72 	        p "SVEC sf: #{sf} y: #{y} x: #{x} z: #{z}"
+73 	    end
+74 	    pc = pc + 1
+75 	  end
+76 	end
+77 	
+78 	
+79 	serverSocket = UDPSocket.new
+80 	serverSocket.bind("localhost",$recport)
+81 	
+82 	(1..15).each do |i|
+83 	  msg = 'ctmame'
+84 	  msg << ( i%2==0 ? 0x16 : 0x14)
+85 	  msg << i%255
+86 	 
+87 	  serverSocket.send(msg,0,"localhost",$sendport)
+88 	  rec = serverSocket.recvfrom($maxSize)
+89 	  interpretScreen(rec[0])
+90 	  p "sended #{i} recieved #{rec[0][1025]}"
+91 	  p "Framenumber: #{rec[0][1024]}"
+92 	  i= i+1
+93 	end
